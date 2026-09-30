@@ -1,0 +1,122 @@
+[
+  {
+    "code": 1,
+    "name": "Louvre",
+    "lat": 48.86256,
+    "lon": 2.33644
+  },
+  {
+    "code": 2,
+    "name": "Bourse",
+    "lat": 48.86828,
+    "lon": 2.3428
+  },
+  {
+    "code": 3,
+    "name": "Temple",
+    "lat": 48.86287,
+    "lon": 2.36
+  },
+  {
+    "code": 4,
+    "name": "Hôtel-de-Ville",
+    "lat": 48.85434,
+    "lon": 2.35763
+  },
+  {
+    "code": 5,
+    "name": "Panthéon",
+    "lat": 48.84444,
+    "lon": 2.35071
+  },
+  {
+    "code": 6,
+    "name": "Luxembourg",
+    "lat": 48.84913,
+    "lon": 2.3329
+  },
+  {
+    "code": 7,
+    "name": "Palais-Bourbon",
+    "lat": 48.85617,
+    "lon": 2.31219
+  },
+  {
+    "code": 8,
+    "name": "Élysée",
+    "lat": 48.87272,
+    "lon": 2.31255
+  },
+  {
+    "code": 9,
+    "name": "Opéra",
+    "lat": 48.87716,
+    "lon": 2.33746
+  },
+  {
+    "code": 10,
+    "name": "Entrepôt",
+    "lat": 48.87613,
+    "lon": 2.36073
+  },
+  {
+    "code": 11,
+    "name": "Popincourt",
+    "lat": 48.85906,
+    "lon": 2.38006
+  },
+  {
+    "code": 12,
+    "name": "Reuilly",
+    "lat": 48.83497,
+    "lon": 2.42132
+  },
+  {
+    "code": 13,
+    "name": "Gobelins",
+    "lat": 48.82839,
+    "lon": 2.36227
+  },
+  {
+    "code": 14,
+    "name": "Observatoire",
+    "lat": 48.82924,
+    "lon": 2.32654
+  },
+  {
+    "code": 15,
+    "name": "Vaugirard",
+    "lat": 48.84009,
+    "lon": 2.29283
+  },
+  {
+    "code": 16,
+    "name": "Passy",
+    "lat": 48.86039,
+    "lon": 2.26197
+  },
+  {
+    "code": 17,
+    "name": "Batignolles-Monceau",
+    "lat": 48.88733,
+    "lon": 2.30678
+  },
+  {
+    "code": 18,
+    "name": "Buttes-Montmartre",
+    "lat": 48.89257,
+    "lon": 2.34816
+  },
+  {
+    "code": 19,
+    "name": "Buttes-Chaumont",
+    "lat": 48.88708,
+    "lon": 2.38482
+  },
+  {
+    "code": 20,
+    "name": "Ménilmontant",
+    "lat": 48.86346,
+    "lon": 2.40119
+  }
+]

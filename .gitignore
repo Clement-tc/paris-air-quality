@@ -1,0 +1,19 @@
+# secrets & local data
+.env
+*.db
+
+# python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# os
+.DS_Store
+
+# ml data (bulky, reproducible via ml/backfill_openaq.py)
+data/
+mlruns/
+
+# runtime logs
+logs/

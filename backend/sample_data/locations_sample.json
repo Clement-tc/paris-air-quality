@@ -1,0 +1,30 @@
+{
+  "meta": {"name": "openaq-api", "page": 1, "limit": 100, "found": 2},
+  "results": [
+    {
+      "id": 7036,
+      "name": "Paris Centre",
+      "locality": "Paris",
+      "timezone": "Europe/Paris",
+      "coordinates": {"latitude": 48.8566, "longitude": 2.3522},
+      "provider": {"id": 4, "name": "EEA"},
+      "sensors": [
+        {"id": 11001, "name": "pm25 µg/m³", "parameter": {"id": 2, "name": "pm25", "units": "µg/m³", "displayName": "PM2.5"}},
+        {"id": 11002, "name": "no2 µg/m³",  "parameter": {"id": 5, "name": "no2",  "units": "µg/m³", "displayName": "NO2"}},
+        {"id": 11003, "name": "o3 µg/m³",   "parameter": {"id": 3, "name": "o3",   "units": "µg/m³", "displayName": "O3"}}
+      ]
+    },
+    {
+      "id": 7042,
+      "name": "Paris 13e - Quai",
+      "locality": "Paris",
+      "timezone": "Europe/Paris",
+      "coordinates": {"latitude": 48.8294, "longitude": 2.3756},
+      "provider": {"id": 4, "name": "EEA"},
+      "sensors": [
+        {"id": 11010, "name": "pm10 µg/m³", "parameter": {"id": 1, "name": "pm10", "units": "µg/m³", "displayName": "PM10"}},
+        {"id": 11011, "name": "no2 µg/m³",  "parameter": {"id": 5, "name": "no2",  "units": "µg/m³", "displayName": "NO2"}}
+      ]
+    }
+  ]
+}
