@@ -52,6 +52,7 @@ export default function Home() {
       setWeather(data.weather);
     } catch (e) {
       console.error("Failed to fetch weather", e);
+      setError(`Weather: ${(e as Error).message}`);
     }
   }, []);
 
