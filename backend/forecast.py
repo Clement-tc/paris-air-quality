@@ -68,12 +68,22 @@ def _nearest_value(rows: list[Reading], target_time: datetime, tolerance_minutes
 def _station_features(rows: list[Reading], now: datetime) -> dict | None:
     """Build the lag/rolling NO2 features for one station from its recent readings."""
     if not rows:
-        return None
+        return {"_error": "no_rows"}
     latest = max(rows, key=lambda r: r.datetime_utc)
-    if now - latest.datetime_utc > STALE_AFTER_HOURS:
-        return None  # station has gone stale/silent -- don't pretend to forecast it
-    if latest.datetime_utc - min(r.datetime_utc for r in rows) < timedelta(hours=MIN_HISTORY_HOURS):
-        return None  # not enough accumulated history yet for lag24h
+    oldest = min(r.datetime_utc for r in rows)
+    staleness = now - latest.datetime_utc
+    depth = latest.datetime_utc - oldest
+    if staleness > STALE_AFTER_HOURS:
+        return {
+            "_error": "stale", "_latest": latest.datetime_utc.isoformat(),
+            "_now": now.isoformat(), "_staleness_hours": staleness.total_seconds() / 3600,
+        }
+    if depth < timedelta(hours=MIN_HISTORY_HOURS):
+        return {
+            "_error": "insufficient_depth", "_latest": latest.datetime_utc.isoformat(),
+            "_oldest": oldest.isoformat(), "_depth_hours": depth.total_seconds() / 3600,
+            "_n_rows": len(rows),
+        }
 
     t = latest.datetime_utc
     window_start = t - timedelta(hours=24)
@@ -130,11 +140,14 @@ async def compute_forecasts(db: Session) -> list[dict]:
         for sid in station_ids
         if sid in locations
     }
-    forecastable = {sid: f for sid, f in station_feats.items() if f is not None}
+    forecastable = {sid: f for sid, f in station_feats.items() if "_error" not in f}
+    diagnostics = {sid: f for sid, f in station_feats.items() if "_error" in f}
 
     if not forecastable:
         return [
-            {"location_id": sid, "risk_24h": None, "reason": "insufficient_history"}
+            {"location_id": sid, "risk_24h": None,
+             "reason": diagnostics.get(sid, {}).get("_error", "insufficient_history"),
+             "debug": diagnostics.get(sid)}
             for sid in station_ids
         ]
 
@@ -189,7 +202,9 @@ async def compute_forecasts(db: Session) -> list[dict]:
 
     missing = set(station_ids) - set(ordered_ids)
     results += [
-        {"location_id": sid, "risk_24h": None, "reason": "insufficient_history"}
+        {"location_id": sid, "risk_24h": None,
+         "reason": diagnostics.get(sid, {}).get("_error", "insufficient_history"),
+         "debug": diagnostics.get(sid)}
         for sid in missing
     ]
     return results
