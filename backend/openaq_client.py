@@ -66,3 +66,24 @@ async def fetch_latest(location_ids: list[int]) -> dict[int, list[dict]]:
             except httpx.HTTPStatusError:
                 out[loc_id] = []  # one bad station shouldn't sink the whole refresh
     return out
+
+
+async def fetch_sensor_hours(sensors_id: int, datetime_from: str, datetime_to: str) -> list[dict]:
+    """
+    Real recent hourly aggregates for one sensor, straight from OpenAQ's live
+    measurement pipeline (NOT the S3 archive export, which lags ~4-5 days).
+    Used to backfill a freshly (re)deployed instance's history in one shot
+    with genuine past readings, instead of waiting hours for /admin/refresh
+    (which only ever captures a single "latest" snapshot per call) to build
+    up the same depth naturally.
+    """
+    async with httpx.AsyncClient(timeout=settings.request_timeout_seconds) as client:
+        try:
+            data = await _get(client, f"/sensors/{sensors_id}/hours", {
+                "datetime_from": datetime_from,
+                "datetime_to": datetime_to,
+                "limit": 100,
+            })
+        except httpx.HTTPStatusError:
+            return []
+    return data.get("results", [])

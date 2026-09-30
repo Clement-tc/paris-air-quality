@@ -34,7 +34,12 @@ PARIS_TZ = ZoneInfo("Europe/Paris")
 # Needs at least a 24h-old reading for the lag24h/rolling24h features to
 # exist at all; without it we'd be guessing rather than predicting.
 MIN_HISTORY_HOURS = 25
-HISTORY_WINDOW_HOURS = 30  # a little slack around MIN_HISTORY_HOURS for gaps
+# OpenAQ's own pipeline has real processing lag (observed ~2h45 in practice,
+# both via /latest and /sensors/hours) -- 2h was tripping the staleness check
+# on perfectly good, current stations. This isn't about our data, it's about
+# how fresh OpenAQ itself ever reports.
+STALE_AFTER_HOURS = timedelta(hours=6)
+HISTORY_WINDOW_HOURS = 30 + 6  # MIN_HISTORY_HOURS + slack for gaps + staleness allowance
 
 _artifact = None
 
@@ -65,7 +70,7 @@ def _station_features(rows: list[Reading], now: datetime) -> dict | None:
     if not rows:
         return None
     latest = max(rows, key=lambda r: r.datetime_utc)
-    if now - latest.datetime_utc > timedelta(hours=2):
+    if now - latest.datetime_utc > STALE_AFTER_HOURS:
         return None  # station has gone stale/silent -- don't pretend to forecast it
     if latest.datetime_utc - min(r.datetime_utc for r in rows) < timedelta(hours=MIN_HISTORY_HOURS):
         return None  # not enough accumulated history yet for lag24h

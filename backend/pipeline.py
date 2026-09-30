@@ -10,7 +10,7 @@ Without that join every reading would be an anonymous float.
 unit-tested offline with no network — see test_offline.py.
 """
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
@@ -156,5 +156,56 @@ async def run_refresh(db: Session) -> RefreshStats:
     loc_ids = [l["id"] for l in locations]
     latest = await openaq_client.fetch_latest(loc_ids)
     readings = transform(locations, latest, stats)
+    ingest(readings, db, stats)
+    return stats
+
+
+async def backfill_recent_history(db: Session, hours: int, parameter: str) -> RefreshStats:
+    """
+    Pull real recent hourly data straight from OpenAQ's live measurement API
+    (/sensors/{id}/hours -- NOT the S3 archive export, which lags ~4-5 days
+    and would just be empty for "the last N hours"). One-shot backfill so a
+    freshly (re)deployed instance doesn't have to wait hours for
+    /admin/refresh's single-snapshot-per-call to build up the same depth.
+
+    Every inserted row is a genuine OpenAQ measurement -- this fills in
+    naturally-occurring history sooner, it doesn't fabricate any.
+    """
+    import openaq_client
+    stats = RefreshStats()
+    locations_payload = await openaq_client.fetch_locations()
+
+    now = datetime.now(timezone.utc)
+    dt_from = (now - timedelta(hours=hours)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    dt_to = now.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    readings: list[CleanReading] = []
+    for raw in locations_payload:
+        loc = RawLocation.model_validate(raw)
+        stats.locations_seen += 1
+        lat, lon = loc.coordinates.latitude, loc.coordinates.longitude
+        if lat is None or lon is None:
+            continue
+        for s in loc.sensors:
+            if s.parameter.name.lower() != parameter:
+                continue
+            hourly = await openaq_client.fetch_sensor_hours(s.id, dt_from, dt_to)
+            for h in hourly:
+                stats.latest_values_seen += 1
+                val = h.get("value")
+                dt_str = (h.get("period") or {}).get("datetimeFrom", {}).get("utc")
+                if val is None or dt_str is None:
+                    stats.reject("missing_value_or_time")
+                    continue
+                dt = datetime.fromisoformat(dt_str.replace("Z", "+00:00")).replace(tzinfo=None)
+                sev = aqi.classify(parameter, val, s.parameter.units)
+                readings.append(CleanReading(
+                    location_id=loc.id, location_name=loc.name, sensors_id=s.id,
+                    parameter=parameter, value=val, units=s.parameter.units,
+                    latitude=lat, longitude=lon, datetime_utc=dt, datetime_local=None,
+                    category_index=sev.category_index, category_label=sev.category_label,
+                    color_hex=sev.color_hex, sub_index=sev.sub_index,
+                ))
+
     ingest(readings, db, stats)
     return stats

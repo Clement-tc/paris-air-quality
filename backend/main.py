@@ -111,6 +111,26 @@ async def refresh(db: Session = Depends(get_session)):
     return {"ok": True, "stats": stats.__dict__}
 
 
+@app.post("/admin/backfill_history")
+async def backfill_history(
+    hours: int = Query(40, le=168),
+    parameter: str = Query("no2"),
+    db: Session = Depends(get_session),
+):
+    """
+    One-shot real-data backfill from OpenAQ's live /sensors/{id}/hours API
+    (not the S3 archive, which lags ~4-5 days and has nothing this recent).
+    Lets a freshly (re)deployed instance's forecast feature work immediately
+    instead of waiting ~25h for /admin/refresh to build up the same history
+    one snapshot at a time. Every row is a genuine past OpenAQ measurement.
+    """
+    try:
+        stats = await pipeline.backfill_recent_history(db, hours=hours, parameter=parameter)
+    except OpenAQError as e:
+        raise HTTPException(status_code=502, detail=str(e))
+    return {"ok": True, "stats": stats.__dict__}
+
+
 @app.get("/admin/stats")
 def stats(db: Session = Depends(get_session)):
     total = db.scalar(select(func.count()).select_from(Reading)) or 0
