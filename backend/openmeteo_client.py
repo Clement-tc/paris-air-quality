@@ -77,9 +77,13 @@ async def fetch_air_quality(
 
 
 # Current weather variables we surface (Open-Meteo name kept as-is).
+# wind_direction_10m/precipitation/surface_pressure/cloud_cover are here for
+# forecast.py's feature computation, not shown in /api/weather's response --
+# fetched together so we only make one upstream call (cached) per refresh.
 _WEATHER_VARS = (
     "temperature_2m,apparent_temperature,relative_humidity_2m,"
-    "wind_speed_10m,weather_code"
+    "wind_speed_10m,wind_direction_10m,precipitation,surface_pressure,"
+    "cloud_cover,weather_code"
 )
 
 
@@ -91,7 +95,9 @@ async def fetch_weather(
     Fetch current weather for a list of (lat, lon).
 
     Returns a list aligned with `points`; each item has temperature (°C),
-    apparent_temperature (°C), humidity (%), wind_speed (km/h), weather_code.
+    apparent_temperature (°C), humidity (%), wind_speed (km/h), wind_direction
+    (deg), precipitation (mm), surface_pressure (hPa), cloud_cover (%),
+    weather_code.
     """
     if not points:
         return []
@@ -121,6 +127,10 @@ async def fetch_weather(
             "apparent_temperature": c.get("apparent_temperature"),
             "humidity": c.get("relative_humidity_2m"),
             "wind_speed": c.get("wind_speed_10m"),
+            "wind_direction": c.get("wind_direction_10m"),
+            "precipitation": c.get("precipitation"),
+            "surface_pressure": c.get("surface_pressure"),
+            "cloud_cover": c.get("cloud_cover"),
             "weather_code": c.get("weather_code"),
         })
     return out

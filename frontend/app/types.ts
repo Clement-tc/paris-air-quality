@@ -34,6 +34,20 @@ export interface WeatherResponse {
   weather: Weather[];
 }
 
+// NO2 exceedance risk per station (from /api/forecast). null risk_24h means
+// the station doesn't have enough accumulated history yet to forecast.
+export interface Forecast {
+  location_id: number;
+  risk_24h: number | null;
+  reason?: string;
+  as_of?: string;
+}
+
+export interface ForecastResponse {
+  count: number;
+  forecasts: Forecast[];
+}
+
 export const PARAMETERS = [
   { value: "", label: "Général" },
   { value: "pm25", label: "PM2.5" },

@@ -20,6 +20,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 import aqi
+import forecast
 import pipeline
 from config import settings
 from database import init_db, get_session, SessionLocal, Location, Reading
@@ -251,3 +252,34 @@ async def weather():
         for arr, w in zip(_ARRONDISSEMENTS, results)
     ]
     return {"count": len(weather_out), "weather": weather_out}
+
+
+FORECAST_CACHE_TTL_SECONDS = 600  # 10 min -- matches the other Open-Meteo-backed endpoints
+
+
+@app.get("/api/forecast")
+async def get_forecast(db: Session = Depends(get_session)):
+    """
+    Risk (0-1) that each station's NO2 will exceed 40 ug/m3 (EEA Good->Fair
+    boundary) in the next 24h. See ml/train_no2_exceedance.py for how the
+    model was trained and validated, and forecast.py for how live features
+    are computed to match it.
+
+    A station returns risk_24h: null with reason "insufficient_history" if it
+    doesn't have ~25h of stored readings yet -- expected right after a fresh
+    deploy on a platform with an ephemeral disk (e.g. Render free tier),
+    until the scheduler has had time to accumulate real history.
+    """
+    try:
+        forecasts = await _cached(
+            "forecast", FORECAST_CACHE_TTL_SECONDS,
+            lambda: forecast.compute_forecasts(db),
+        )
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    except OpenMeteoError as e:
+        raise HTTPException(status_code=502, detail=str(e))
+    except httpx.HTTPError as e:
+        raise HTTPException(status_code=502, detail=f"Open-Meteo request failed: {e}")
+
+    return {"count": len(forecasts), "forecasts": forecasts}

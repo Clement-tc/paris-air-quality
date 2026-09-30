@@ -17,3 +17,9 @@ mlruns/
 
 # runtime logs
 logs/
+
+# personal documents, not project code
+lettre_motivation_descartes.txt
+
+# WSL-only venv (mirrors .venv/ for packages blocked by Windows Smart App Control)
+.venv-wsl/

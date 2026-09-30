@@ -1,4 +1,4 @@
-import { AirReading } from "../types";
+import { AirReading, Forecast } from "../types";
 
 /**
  * A monitoring station = one physical location that may carry several sensors
@@ -11,6 +11,7 @@ export interface Station {
   longitude: number;
   readings: AirReading[]; // every pollutant measured at this location
   dominant: AirReading;   // worst pollutant (highest sub_index) — drives zones
+  risk_24h?: number | null; // NO2 exceedance risk in 24h, from /api/forecast
 }
 
 export function groupStations(readings: AirReading[]): Station[] {
@@ -37,4 +38,10 @@ export function groupStations(readings: AirReading[]): Station[] {
     });
   }
   return stations;
+}
+
+/** Merge NO2 forecast risk onto each station by location_id, in place of a re-group. */
+export function attachForecasts(stations: Station[], forecasts: Forecast[]): Station[] {
+  const byLocation = new Map(forecasts.map((f) => [f.location_id, f.risk_24h]));
+  return stations.map((s) => ({ ...s, risk_24h: byLocation.get(s.location_id) ?? null }));
 }

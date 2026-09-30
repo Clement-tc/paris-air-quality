@@ -2,7 +2,7 @@
 
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { AirReading, AirResponse, DataLayer, Weather } from "./types";
+import { AirReading, AirResponse, DataLayer, Forecast, ForecastResponse, Weather } from "./types";
 import AqiLegend from "./components/AqiLegend";
 import TempLegend from "./components/TempLegend";
 import ParameterSelector from "./components/ParameterSelector";
@@ -21,6 +21,7 @@ const REFRESH_INTERVAL_MS = 5 * 60 * 1000; // re-fetch every 5 min
 export default function Home() {
   const [readings, setReadings] = useState<AirReading[]>([]);
   const [weather, setWeather] = useState<Weather[]>([]);
+  const [forecasts, setForecasts] = useState<Forecast[]>([]);
   const [parameter, setParameter] = useState<string>("");
   const [dataLayer, setDataLayer] = useState<DataLayer>("aqi");
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
@@ -65,6 +66,20 @@ export default function Home() {
     }
   }, [arrondGeojson]);
 
+  // NO2 exceedance risk needs live DB history + model inference, so this one
+  // does go through our backend (see backend/forecast.py). Stations without
+  // ~25h of accumulated history yet come back with risk_24h: null.
+  const fetchForecasts = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_BASE}/api/forecast`);
+      if (!res.ok) return; // non-fatal: forecast is a bonus layer, not core data
+      const data: ForecastResponse = await res.json();
+      setForecasts(data.forecasts);
+    } catch (e) {
+      console.error("Failed to fetch forecasts", e);
+    }
+  }, []);
+
   useEffect(() => {
     fetchData(parameter);
     const id = setInterval(() => fetchData(parameter), REFRESH_INTERVAL_MS);
@@ -78,11 +93,17 @@ export default function Home() {
     return () => clearInterval(id);
   }, [arrondGeojson, fetchWeather]);
 
+  useEffect(() => {
+    fetchForecasts();
+    const id = setInterval(fetchForecasts, REFRESH_INTERVAL_MS);
+    return () => clearInterval(id);
+  }, [fetchForecasts]);
+
   return (
     <div className="relative w-screen h-screen bg-black overflow-hidden">
       {/* Full-screen map */}
       <div className="absolute inset-0">
-        <AirMap readings={readings} weather={weather} dataLayer={dataLayer} />
+        <AirMap readings={readings} weather={weather} forecasts={forecasts} dataLayer={dataLayer} />
       </div>
 
       {/* Subtle radial vignette */}

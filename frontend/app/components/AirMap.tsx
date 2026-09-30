@@ -8,9 +8,9 @@ import type { ComponentProps } from "react";
 import { IconLayer, GeoJsonLayer } from "@deck.gl/layers";
 import type { PickingInfo } from "@deck.gl/core";
 import "maplibre-gl/dist/maplibre-gl.css";
-import { AirReading, DataLayer, Weather } from "../types";
+import { AirReading, DataLayer, Forecast, Weather } from "../types";
 import { DETECTOR_ICON } from "../lib/detectorIcon";
-import { groupStations, type Station } from "../lib/stations";
+import { groupStations, attachForecasts, type Station } from "../lib/stations";
 import { useArrondissements } from "../hooks/useArrondissements";
 import { useWeatherZones } from "../hooks/useWeatherZones";
 import type { ArrondProperties } from "../lib/arrondissements";
@@ -77,15 +77,20 @@ type TooltipInfo = StationTooltip | ZoneTooltip | WeatherTooltip;
 interface Props {
   readings: AirReading[];
   weather: Weather[];
+  forecasts: Forecast[];
   dataLayer: DataLayer;
 }
 
-export default function AirMap({ readings, weather, dataLayer }: Props) {
+export default function AirMap({ readings, weather, forecasts, dataLayer }: Props) {
   const [tooltip, setTooltip] = useState<TooltipInfo | null>(null);
   const [viewState, setViewState] = useState<MapViewState>(INITIAL_VIEW);
 
-  // Group readings into stations (one marker per location, all pollutants kept).
-  const stations = useMemo(() => groupStations(readings), [readings]);
+  // Group readings into stations (one marker per location, all pollutants kept),
+  // then merge in the NO2 exceedance risk for each station if available.
+  const stations = useMemo(
+    () => attachForecasts(groupStations(readings), forecasts),
+    [readings, forecasts],
+  );
   // AQ zones: interpolate the real sensors (IDW) onto each arrondissement.
   const arrondissements = useArrondissements(readings);
   // Weather zones: join Open-Meteo weather onto each arrondissement by number.
@@ -431,9 +436,31 @@ function StationTooltipCard({
             </div>
           ))}
         </div>
+
+        {station.risk_24h != null && (
+          <div className="mt-3 pt-3 border-t border-white/10">
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-[10px] text-white/40 uppercase tracking-widest">
+                Risque NO₂ (+24h)
+              </span>
+              <span
+                className="text-xs font-semibold tabular-nums"
+                style={{ color: riskColor(station.risk_24h) }}
+              >
+                {(station.risk_24h * 100).toFixed(0)}%
+              </span>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
+}
+
+function riskColor(risk: number): string {
+  if (risk < 0.15) return "#50CCAA"; // low
+  if (risk < 0.35) return "#F0E641"; // moderate
+  return "#FF5050"; // elevated
 }
 
 function Row({
