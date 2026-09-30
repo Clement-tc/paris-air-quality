@@ -2,12 +2,15 @@
 
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { AirReading, AirResponse, DataLayer, Weather, WeatherResponse } from "./types";
+import { AirReading, AirResponse, DataLayer, Weather } from "./types";
 import AqiLegend from "./components/AqiLegend";
 import TempLegend from "./components/TempLegend";
 import ParameterSelector from "./components/ParameterSelector";
 import LayerToggle from "./components/LayerToggle";
 import StatsBar from "./components/StatsBar";
+import { useArrondGeojson } from "./hooks/useArrondGeojson";
+import { extractCentroids } from "./lib/centroids";
+import { fetchWeatherDirect } from "./lib/weatherClient";
 
 // deck.gl / maplibre must only render client-side
 const AirMap = dynamic(() => import("./components/AirMap"), { ssr: false });
@@ -43,21 +46,24 @@ export default function Home() {
     }
   }, []);
 
-  // Weather is city-wide, independent of the selected pollutant.
+  // Weather is fetched straight from the browser to Open-Meteo (not through
+  // our backend) — see lib/weatherClient.ts for why: it avoids Render's
+  // shared-IP rate limiting on that free public API. It reuses the same
+  // arrondissement polygons already loaded for the AQ zones (useArrondGeojson
+  // is cached, so this costs no extra network request).
+  const arrondGeojson = useArrondGeojson();
+
   const fetchWeather = useCallback(async () => {
+    if (!arrondGeojson) return;
     try {
-      const res = await fetch(`${API_BASE}/api/weather`);
-      if (!res.ok) {
-        const body = await res.json().catch(() => null);
-        throw new Error(body?.detail ?? `Weather API error ${res.status}`);
-      }
-      const data: WeatherResponse = await res.json();
-      setWeather(data.weather);
+      const centroids = extractCentroids(arrondGeojson);
+      const data = await fetchWeatherDirect(centroids);
+      setWeather(data);
     } catch (e) {
       console.error("Failed to fetch weather", e);
       setError(`Weather: ${(e as Error).message}`);
     }
-  }, []);
+  }, [arrondGeojson]);
 
   useEffect(() => {
     fetchData(parameter);
@@ -66,10 +72,11 @@ export default function Home() {
   }, [parameter, fetchData]);
 
   useEffect(() => {
+    if (!arrondGeojson) return;
     fetchWeather();
     const id = setInterval(fetchWeather, REFRESH_INTERVAL_MS);
     return () => clearInterval(id);
-  }, [fetchWeather]);
+  }, [arrondGeojson, fetchWeather]);
 
   return (
     <div className="relative w-screen h-screen bg-black overflow-hidden">

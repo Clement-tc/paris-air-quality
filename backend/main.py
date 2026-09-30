@@ -7,9 +7,11 @@ FastAPI surface.
   GET  /api/air        map-ready readings (latest per sensor) for the frontend
 """
 import json
+import time
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Awaitable, Callable, TypeVar
 
 import httpx
 from fastapi import FastAPI, Depends, Query, HTTPException
@@ -28,6 +30,37 @@ from openmeteo_client import fetch_air_quality, fetch_weather, OpenMeteoError
 _ARRONDISSEMENTS = json.loads(
     (Path(__file__).parent / "arrondissements.json").read_text(encoding="utf-8")
 )
+
+# --- Tiny in-memory TTL cache for upstream Open-Meteo calls ---
+#
+# Render's free-tier outbound IP is shared across many hobby projects hitting
+# the same free Open-Meteo API, which gets rate-limited (HTTP 429) even at
+# low request volume from us. Every page load + 5-min poll from every visitor
+# was triggering its own upstream call — wasteful and exactly the pattern
+# that trips shared-IP rate limits. Caching collapses that to one upstream
+# call per TTL window, and serves the last good value on a failed refresh
+# (e.g. transient 429) instead of surfacing an error to every visitor.
+T = TypeVar("T")
+_cache: dict[str, tuple[float, object]] = {}
+
+
+async def _cached(key: str, ttl_seconds: float, fetch: Callable[[], Awaitable[T]]) -> T:
+    now = time.monotonic()
+    entry = _cache.get(key)
+    if entry is not None and now - entry[0] < ttl_seconds:
+        return entry[1]  # type: ignore[return-value]
+    try:
+        value = await fetch()
+    except Exception:
+        if entry is not None:
+            return entry[1]  # type: ignore[return-value]  # serve stale on error
+        raise
+    _cache[key] = (now, value)
+    return value
+
+
+WEATHER_CACHE_TTL_SECONDS = 600  # 10 min — weather barely changes faster than this
+ZONES_CACHE_TTL_SECONDS = 600
 
 
 @asynccontextmanager
@@ -155,7 +188,10 @@ async def zones():
     """
     points = [(a["lat"], a["lon"]) for a in _ARRONDISSEMENTS]
     try:
-        concentrations = await fetch_air_quality(points)
+        concentrations = await _cached(
+            "zones_concentrations", ZONES_CACHE_TTL_SECONDS,
+            lambda: fetch_air_quality(points),
+        )
     except OpenMeteoError as e:
         raise HTTPException(status_code=502, detail=str(e))
     except httpx.HTTPError as e:
@@ -197,7 +233,10 @@ async def weather():
     """
     points = [(a["lat"], a["lon"]) for a in _ARRONDISSEMENTS]
     try:
-        results = await fetch_weather(points)
+        results = await _cached(
+            "weather", WEATHER_CACHE_TTL_SECONDS,
+            lambda: fetch_weather(points),
+        )
     except OpenMeteoError as e:
         raise HTTPException(status_code=502, detail=str(e))
     except httpx.HTTPError as e:
