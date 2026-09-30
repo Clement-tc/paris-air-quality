@@ -45,10 +45,10 @@ T = TypeVar("T")
 _cache: dict[str, tuple[float, object]] = {}
 
 
-async def _cached(key: str, ttl_seconds: float, fetch: Callable[[], Awaitable[T]]) -> T:
+async def _cached(key: str, ttl_seconds: float, fetch: Callable[[], Awaitable[T]], force: bool = False) -> T:
     now = time.monotonic()
     entry = _cache.get(key)
-    if entry is not None and now - entry[0] < ttl_seconds:
+    if not force and entry is not None and now - entry[0] < ttl_seconds:
         return entry[1]  # type: ignore[return-value]
     try:
         value = await fetch()
@@ -276,11 +276,11 @@ async def weather():
     return {"count": len(weather_out), "weather": weather_out}
 
 
-FORECAST_CACHE_TTL_SECONDS = 600  # 10 min -- matches the other Open-Meteo-backed endpoints
+FORECAST_CACHE_TTL_SECONDS = 120  # short: recomputing is cheap and freshness matters more here
 
 
 @app.get("/api/forecast")
-async def get_forecast(db: Session = Depends(get_session)):
+async def get_forecast(force: bool = Query(False), db: Session = Depends(get_session)):
     """
     Risk (0-1) that each station's NO2 will exceed 40 ug/m3 (EEA Good->Fair
     boundary) in the next 24h. See ml/train_no2_exceedance.py for how the
@@ -291,11 +291,15 @@ async def get_forecast(db: Session = Depends(get_session)):
     doesn't have ~25h of stored readings yet -- expected right after a fresh
     deploy on a platform with an ephemeral disk (e.g. Render free tier),
     until the scheduler has had time to accumulate real history.
+
+    ?force=true bypasses the cache -- useful right after a backfill/refresh
+    when you don't want to wait out the TTL to see the new state.
     """
     try:
         forecasts = await _cached(
             "forecast", FORECAST_CACHE_TTL_SECONDS,
             lambda: forecast.compute_forecasts(db),
+            force=force,
         )
     except FileNotFoundError as e:
         raise HTTPException(status_code=503, detail=str(e))
