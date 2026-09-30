@@ -1,0 +1,20 @@
+name: Refresh air quality data
+
+# Render's free tier has no built-in cron/always-on worker, and the NO2
+# forecast needs ~25h of accumulated per-station history to work at all --
+# without something periodically calling /admin/refresh, the deployed DB
+# never fills up. GitHub Actions' free scheduled workflows fill that gap.
+on:
+  schedule:
+    - cron: "0 * * * *" # every hour, on the hour (UTC)
+  workflow_dispatch: {} # allows manually triggering a refresh from the Actions tab
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - name: POST /admin/refresh
+        run: |
+          curl -sf -X POST "https://paris-air-quality-api.onrender.com/admin/refresh" \
+            --max-time 120 \
+            -w "\nHTTP %{http_code}\n"
