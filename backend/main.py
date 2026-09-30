@@ -93,9 +93,11 @@ app.add_middleware(
 
 @app.get("/health")
 def health():
+    from database import engine
     return {
         "status": "ok",
         "openaq_key_configured": bool(settings.openaq_api_key),
+        "database_backend": engine.url.get_backend_name(),  # "sqlite" or "postgresql" -- no credentials
         "time": datetime.now(timezone.utc).isoformat(),
     }
 
