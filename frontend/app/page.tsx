@@ -47,7 +47,10 @@ export default function Home() {
   const fetchWeather = useCallback(async () => {
     try {
       const res = await fetch(`${API_BASE}/api/weather`);
-      if (!res.ok) throw new Error(`Weather API error ${res.status}`);
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        throw new Error(body?.detail ?? `Weather API error ${res.status}`);
+      }
       const data: WeatherResponse = await res.json();
       setWeather(data.weather);
     } catch (e) {
