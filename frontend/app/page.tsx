@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { AirReading, AirResponse, DataLayer, Forecast, ForecastResponse, Weather } from "./types";
 import AqiLegend from "./components/AqiLegend";
 import TempLegend from "./components/TempLegend";
+import ForecastLegend from "./components/ForecastLegend";
 import ParameterSelector from "./components/ParameterSelector";
 import LayerToggle from "./components/LayerToggle";
 import StatsBar from "./components/StatsBar";
@@ -135,7 +136,7 @@ export default function Home() {
               Paris Air Quality
             </h1>
             <p className="text-white/40 text-xs mt-0.5">
-            {dataLayer === "aqi" ? "Live · EEA Index" : "Live · Météo"}
+            {dataLayer === "aqi" ? "Live · EEA Index" : dataLayer === "temperature" ? "Live · Météo" : "Live · Prédiction NO₂"}
           </p>
           </div>
 
@@ -191,7 +192,7 @@ export default function Home() {
 
       {/* Bottom-right legend */}
       <div className="absolute bottom-6 right-4 z-10">
-        {dataLayer === "aqi" ? <AqiLegend /> : <TempLegend />}
+        {dataLayer === "aqi" ? <AqiLegend /> : dataLayer === "temperature" ? <TempLegend /> : <ForecastLegend />}
       </div>
 
       {/* Error toast */}

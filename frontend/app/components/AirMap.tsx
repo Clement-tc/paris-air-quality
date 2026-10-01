@@ -8,7 +8,7 @@ import type { ComponentProps } from "react";
 import { IconLayer, GeoJsonLayer } from "@deck.gl/layers";
 import type { PickingInfo } from "@deck.gl/core";
 import "maplibre-gl/dist/maplibre-gl.css";
-import { AirReading, DataLayer, Forecast, Weather } from "../types";
+import { AirReading, DataLayer, Forecast, Weather, riskColor } from "../types";
 import { DETECTOR_ICON } from "../lib/detectorIcon";
 import { groupStations, attachForecasts, type Station } from "../lib/stations";
 import { useArrondissements } from "../hooks/useArrondissements";
@@ -182,11 +182,21 @@ export default function AirMap({ readings, weather, forecasts, dataLayer }: Prop
     getPosition: (d) => [d.longitude, d.latitude],
     getSize: 30,
     sizeUnits: "pixels",
-    getColor: () => [255, 45, 45, 255],
+    getColor: (d) => {
+      if (dataLayer !== "forecast") return [255, 45, 45, 255];
+      // Prediction mode: colour by risk so a glance shows which stations are
+      // elevated — grey means no forecast yet (not enough accumulated history).
+      if (d.risk_24h == null) return [120, 120, 120, 180];
+      const [r, g, b] = hexToRgb(riskColor(d.risk_24h));
+      return [r, g, b, 255];
+    },
     onHover: onHoverDetector,
     // Always draw markers on top — without this the tilted (3D) zone polygon
     // sits at the same depth and clips/masks the icon.
     parameters: { depthCompare: "always" },
+    updateTriggers: {
+      getColor: [dataLayer, stations.map((s) => s.risk_24h)],
+    },
   });
 
   // Temperature choropleth (only in weather mode).
@@ -218,10 +228,15 @@ export default function AirMap({ readings, weather, forecasts, dataLayer }: Prop
       },
     });
 
-  // AQ mode: sensor zones + detector markers. Weather mode: temperature zones.
+  // AQ mode: sensor zones + detector markers. Weather mode: temperature
+  // zones only. Prediction mode: just the risk-coloured markers -- the
+  // forecast is per-station, not per-arrondissement, so a zone layer here
+  // would misleadingly imply a resolution the model doesn't have.
   const layers =
     dataLayer === "aqi"
       ? [...(zoneLayer ? [zoneLayer] : []), detectorLayer]
+      : dataLayer === "forecast"
+      ? [detectorLayer]
       : [...(weatherLayer ? [weatherLayer] : [])];
 
   return (
@@ -455,12 +470,6 @@ function StationTooltipCard({
       </div>
     </div>
   );
-}
-
-function riskColor(risk: number): string {
-  if (risk < 0.15) return "#50CCAA"; // low
-  if (risk < 0.35) return "#F0E641"; // moderate
-  return "#FF5050"; // elevated
 }
 
 function Row({

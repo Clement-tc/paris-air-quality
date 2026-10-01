@@ -58,13 +58,25 @@ export const PARAMETERS = [
   { value: "co", label: "CO" },
 ] as const;
 
-// Which data layer the zone choropleth shows.
-export type DataLayer = "aqi" | "temperature";
+// Which data layer the map shows.
+export type DataLayer = "aqi" | "temperature" | "forecast";
 
 export const DATA_LAYERS: { value: DataLayer; label: string; available: boolean }[] = [
   { value: "aqi",         label: "Air Quality", available: true },
   { value: "temperature", label: "Temperature", available: true },
+  { value: "forecast",    label: "Prediction",  available: true },
 ];
+
+// Risk colour bands for the NO2 exceedance forecast (+24h), low -> high.
+export const RISK_BANDS = [
+  { max: 0.15, label: "Faible",  color: "#50CCAA" },
+  { max: 0.35, label: "Modéré",  color: "#F0E641" },
+  { max: 1.01, label: "Élevé",   color: "#FF5050" },
+] as const;
+
+export function riskColor(risk: number): string {
+  return RISK_BANDS.find((b) => risk < b.max)?.color ?? "#FF5050";
+}
 
 // Temperature colour ramp (°C thresholds → colour), cold blue → hot red.
 export const TEMP_STOPS = [
