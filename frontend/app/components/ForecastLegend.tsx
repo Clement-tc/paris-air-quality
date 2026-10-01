@@ -27,7 +27,7 @@ export default function ForecastLegend() {
         </div>
       </div>
       <p className="mt-3 pt-2 border-t border-white/10 text-white/30 text-[10px] leading-snug">
-        "Élevé" = forte chance de dégradation, pas forcément un air déjà mauvais aujourd'hui.
+        «&nbsp;Élevé&nbsp;» = forte chance de dégradation, pas forcément un air déjà mauvais aujourd&apos;hui.
       </p>
     </div>
   );

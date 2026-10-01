@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { AirReading, AirResponse, DataLayer, Forecast, ForecastResponse, Weather } from "./types";
 import AqiLegend from "./components/AqiLegend";
 import TempLegend from "./components/TempLegend";
