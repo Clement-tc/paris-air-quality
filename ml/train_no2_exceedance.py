@@ -53,8 +53,12 @@ THRESHOLD_UG_M3 = 40.0   # NO2 "Good -> Fair or worse" boundary (EEA band)
 HORIZON_HOURS = 24       # predict this far ahead
 TEST_DAYS = 60           # most recent N days held out, strictly after train
 
-OPENAQ_PATH = "data/openaq_history_20250627_20260626.parquet"
-WEATHER_PATH = "data/weather_history_20250627_20260626.parquet"
+# Absolute, not relative to cwd -- a relative "data/..." string only worked
+# when run from the project root; broke the moment this got imported from a
+# notebook in ml/ (Jupyter's cwd is the notebook's own directory).
+_DATA_DIR = Path(__file__).parent.parent / "data"
+OPENAQ_PATH = _DATA_DIR / "openaq_history_20250627_20260626.parquet"
+WEATHER_PATH = _DATA_DIR / "weather_history_20250627_20260626.parquet"
 
 
 # ---------------------------------------------------------------------------
