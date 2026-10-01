@@ -152,9 +152,17 @@ async def compute_forecasts(db: Session) -> list[dict]:
         ]
 
     # One batched weather call for every forecastable station's own coordinates.
+    # Weather is a real model feature, but it's a third-party call that can
+    # fail (Render's shared IP gets rate-limited by Open-Meteo independently
+    # of our own traffic -- see openmeteo_client.py). Degrade gracefully to
+    # missing weather (the model handles NaN natively) rather than losing the
+    # whole forecast over one upstream outage.
     ordered_ids = list(forecastable.keys())
     points = [(locations[sid].latitude, locations[sid].longitude) for sid in ordered_ids]
-    weather = await fetch_weather(points)
+    try:
+        weather = await fetch_weather(points)
+    except Exception:
+        weather = [{} for _ in ordered_ids]
 
     local_now = now_utc_aware.astimezone(PARIS_TZ)
     calendar = {
