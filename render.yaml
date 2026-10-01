@@ -12,3 +12,7 @@ services:
         sync: false # set manually in the Render dashboard — get a free key at https://explore.openaq.org
       - key: FRONTEND_ORIGINS
         value: "*" # tighten to your Vercel URL after the frontend is deployed
+      - key: DATABASE_URL
+        sync: false # set manually in the Render dashboard -- a Postgres URL (e.g. Neon)
+        # so history survives redeploys instead of resetting on the default
+        # ephemeral SQLite file. Copy the value from your local backend/.env.
