@@ -1,9 +1,10 @@
 "use client";
-import { AirReading, DataLayer, Weather } from "../types";
+import { AirReading, DataLayer, Forecast, Weather } from "../types";
 
 interface Props {
   readings: AirReading[];
   weather: Weather[];
+  forecasts: Forecast[];
   dataLayer: DataLayer;
   lastUpdated: string | null;
   loading: boolean;
@@ -12,6 +13,7 @@ interface Props {
 export default function StatsBar({
   readings,
   weather,
+  forecasts,
   dataLayer,
   lastUpdated,
   loading,
@@ -40,11 +42,26 @@ export default function StatsBar({
           .reduce((s, v, _, arr) => s + v / arr.length, 0)
       : null;
 
+  const scoredForecasts = forecasts.filter(
+    (f): f is Forecast & { risk_24h: number } => f.risk_24h !== null,
+  );
+  const avgRisk =
+    scoredForecasts.length > 0
+      ? scoredForecasts.reduce((s, f) => s + f.risk_24h, 0) / scoredForecasts.length
+      : null;
+  const highestRisk = scoredForecasts.reduce<Forecast | null>((acc, f) => {
+    if (!acc || (f.risk_24h ?? 0) > (acc.risk_24h ?? 0)) return f;
+    return acc;
+  }, null);
+
+  const title =
+    dataLayer === "aqi" ? "Paris Air Quality"
+    : dataLayer === "temperature" ? "Paris Météo"
+    : "Paris Prédiction";
+
   return (
     <div className="flex flex-wrap items-center gap-3 px-5 py-3 rounded-2xl bg-white/5 backdrop-blur-md border border-white/10 text-white shadow-xl">
-      <span className="font-bold text-base tracking-tight">
-        {dataLayer === "aqi" ? "Paris Air Quality" : "Paris Météo"}
-      </span>
+      <span className="font-bold text-base tracking-tight">{title}</span>
 
       <div className="w-px h-4 bg-white/20 hidden sm:block" />
 
@@ -75,7 +92,7 @@ export default function StatsBar({
             </div>
           )}
         </>
-      ) : (
+      ) : dataLayer === "temperature" ? (
         <>
           {avgTemp !== null && (
             <Stat label="Temp. moy." value={`${avgTemp.toFixed(1)}°C`} />
@@ -84,6 +101,24 @@ export default function StatsBar({
             <Stat label="Vent moy." value={`${avgWind.toFixed(0)} km/h`} />
           )}
           <Stat label="Zones" value={weather.length.toString()} />
+        </>
+      ) : (
+        <>
+          <Stat
+            label="Stations prévues"
+            value={`${scoredForecasts.length} / ${forecasts.length}`}
+          />
+          {avgRisk !== null && (
+            <Stat label="Risque moy." value={`${(avgRisk * 100).toFixed(0)}%`} />
+          )}
+          {highestRisk && highestRisk.risk_24h !== null && (
+            <div className="flex items-center gap-2 text-sm">
+              <span className="text-white/40 text-xs">Max</span>
+              <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-white/10">
+                Station #{highestRisk.location_id} · {(highestRisk.risk_24h * 100).toFixed(0)}%
+              </span>
+            </div>
+          )}
         </>
       )}
 

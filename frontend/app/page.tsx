@@ -144,6 +144,7 @@ export default function Home() {
             <StatsBar
               readings={readings}
               weather={weather}
+              forecasts={forecasts}
               dataLayer={dataLayer}
               lastUpdated={lastUpdated}
               loading={loading}
