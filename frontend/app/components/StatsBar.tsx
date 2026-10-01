@@ -57,7 +57,7 @@ export default function StatsBar({
   const title =
     dataLayer === "aqi" ? "Paris Air Quality"
     : dataLayer === "temperature" ? "Paris Météo"
-    : "Paris Prédiction";
+    : "Paris Prédiction NO₂";
 
   return (
     <div className="flex flex-wrap items-center gap-3 px-5 py-3 rounded-2xl bg-white/5 backdrop-blur-md border border-white/10 text-white shadow-xl">

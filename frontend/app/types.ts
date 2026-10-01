@@ -62,16 +62,20 @@ export const PARAMETERS = [
 export type DataLayer = "aqi" | "temperature" | "forecast";
 
 export const DATA_LAYERS: { value: DataLayer; label: string; available: boolean }[] = [
-  { value: "aqi",         label: "Air Quality", available: true },
-  { value: "temperature", label: "Temperature", available: true },
-  { value: "forecast",    label: "Prediction",  available: true },
+  { value: "aqi",         label: "Air Quality",  available: true },
+  { value: "temperature", label: "Temperature",  available: true },
+  { value: "forecast",    label: "Prediction NO₂", available: true },
 ];
 
 // Risk colour bands for the NO2 exceedance forecast (+24h), low -> high.
+// Deliberately an indigo -> violet -> magenta ramp, NOT green/yellow/red --
+// reusing AQI's colours here would make people read "red zone" as "bad air
+// right now" when it actually means "high PROBABILITY of crossing a
+// threshold", a different thing from the current pollution level.
 export const RISK_BANDS = [
-  { max: 0.15, label: "Faible",  color: "#50CCAA" },
-  { max: 0.35, label: "Modéré",  color: "#F0E641" },
-  { max: 1.01, label: "Élevé",   color: "#FF5050" },
+  { max: 0.15, label: "Faible",  color: "#6C7AE0" },
+  { max: 0.35, label: "Modéré",  color: "#9D5CE0" },
+  { max: 1.01, label: "Élevé",   color: "#D6368F" },
 ] as const;
 
 export function riskColor(risk: number): string {
