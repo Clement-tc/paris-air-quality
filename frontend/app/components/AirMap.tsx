@@ -13,8 +13,10 @@ import { DETECTOR_ICON } from "../lib/detectorIcon";
 import { groupStations, attachForecasts, type Station } from "../lib/stations";
 import { useArrondissements } from "../hooks/useArrondissements";
 import { useWeatherZones } from "../hooks/useWeatherZones";
+import { useForecastZones } from "../hooks/useForecastZones";
 import type { ArrondProperties } from "../lib/arrondissements";
 import type { WeatherZoneProperties } from "../lib/weatherZones";
+import type { ForecastZoneProperties } from "../lib/forecastZones";
 import { weatherLabel } from "../lib/weatherCodes";
 
 const PARIS_BOUNDS: [[number, number], [number, number]] = [
@@ -60,6 +62,12 @@ interface StationTooltip {
   y: number;
   station: Station;
 }
+interface StationForecastTooltip {
+  kind: "station-forecast";
+  x: number;
+  y: number;
+  station: Station;
+}
 interface ZoneTooltip {
   kind: "zone";
   x: number;
@@ -72,7 +80,18 @@ interface WeatherTooltip {
   y: number;
   props: WeatherZoneProperties;
 }
-type TooltipInfo = StationTooltip | ZoneTooltip | WeatherTooltip;
+interface ForecastZoneTooltip {
+  kind: "forecast-zone";
+  x: number;
+  y: number;
+  props: ForecastZoneProperties;
+}
+type TooltipInfo =
+  | StationTooltip
+  | StationForecastTooltip
+  | ZoneTooltip
+  | WeatherTooltip
+  | ForecastZoneTooltip;
 
 interface Props {
   readings: AirReading[];
@@ -95,6 +114,9 @@ export default function AirMap({ readings, weather, forecasts, dataLayer }: Prop
   const arrondissements = useArrondissements(readings);
   // Weather zones: join Open-Meteo weather onto each arrondissement by number.
   const weatherZones = useWeatherZones(weather);
+  // Prediction zones: IDW-interpolate each station's real risk_24h onto the
+  // arrondissements, same method as the AQI zones (see lib/forecastZones.ts).
+  const forecastZones = useForecastZones(stations);
 
   const onViewStateChange = useCallback(
     (params: ViewStateChangeParameters<MapViewState>) => {
@@ -116,16 +138,34 @@ export default function AirMap({ readings, weather, forecasts, dataLayer }: Prop
     }
   }, []);
 
-  const onHoverDetector = useCallback((info: PickingInfo) => {
+  const onHoverDetector = useCallback(
+    (info: PickingInfo) => {
+      if (info.object) {
+        setTooltip({
+          kind: dataLayer === "forecast" ? "station-forecast" : "station",
+          x: info.x,
+          y: info.y,
+          station: info.object as Station,
+        });
+      } else {
+        setTooltip((prev) =>
+          prev?.kind === "station" || prev?.kind === "station-forecast" ? null : prev,
+        );
+      }
+    },
+    [dataLayer],
+  );
+
+  const onHoverForecastZone = useCallback((info: PickingInfo) => {
     if (info.object) {
       setTooltip({
-        kind: "station",
+        kind: "forecast-zone",
         x: info.x,
         y: info.y,
-        station: info.object as Station,
+        props: (info.object as { properties: ForecastZoneProperties }).properties,
       });
     } else {
-      setTooltip((prev) => (prev?.kind === "station" ? null : prev));
+      setTooltip(null);
     }
   }, []);
 
@@ -228,15 +268,43 @@ export default function AirMap({ readings, weather, forecasts, dataLayer }: Prop
       },
     });
 
+  // Prediction zones: same IDW choropleth pattern, risk-coloured.
+  const forecastZoneLayer =
+    forecastZones &&
+    new GeoJsonLayer({
+      id: "forecast-zones",
+      data: forecastZones,
+      pickable: true,
+      stroked: true,
+      filled: true,
+      getFillColor: (f) => {
+        const hex = (f as { properties: ForecastZoneProperties }).properties.color_hex;
+        if (!hex) return [40, 40, 40, 60];
+        const [r, g, b] = hexToRgb(hex);
+        return [r, g, b, 90];
+      },
+      getLineColor: (f) => {
+        const hex = (f as { properties: ForecastZoneProperties }).properties.color_hex;
+        if (!hex) return [80, 80, 80, 120];
+        const [r, g, b] = hexToRgb(hex);
+        return [r, g, b, 210];
+      },
+      lineWidthMinPixels: 1.5,
+      onHover: onHoverForecastZone,
+      updateTriggers: {
+        getFillColor: stations.map((s) => s.risk_24h),
+        getLineColor: stations.map((s) => s.risk_24h),
+      },
+    });
+
   // AQ mode: sensor zones + detector markers. Weather mode: temperature
-  // zones only. Prediction mode: just the risk-coloured markers -- the
-  // forecast is per-station, not per-arrondissement, so a zone layer here
-  // would misleadingly imply a resolution the model doesn't have.
+  // zones. Prediction mode: risk zones (IDW from real station predictions)
+  // + risk-coloured markers.
   const layers =
     dataLayer === "aqi"
       ? [...(zoneLayer ? [zoneLayer] : []), detectorLayer]
       : dataLayer === "forecast"
-      ? [detectorLayer]
+      ? [...(forecastZoneLayer ? [forecastZoneLayer] : []), detectorLayer]
       : [...(weatherLayer ? [weatherLayer] : [])];
 
   return (
@@ -259,8 +327,14 @@ export default function AirMap({ readings, weather, forecasts, dataLayer }: Prop
       {tooltip?.kind === "station" && (
         <StationTooltipCard x={tooltip.x} y={tooltip.y} station={tooltip.station} />
       )}
+      {tooltip?.kind === "station-forecast" && (
+        <StationForecastTooltipCard x={tooltip.x} y={tooltip.y} station={tooltip.station} />
+      )}
       {tooltip?.kind === "weather" && (
         <WeatherTooltipCard x={tooltip.x} y={tooltip.y} props={tooltip.props} />
+      )}
+      {tooltip?.kind === "forecast-zone" && (
+        <ForecastZoneTooltipCard x={tooltip.x} y={tooltip.y} props={tooltip.props} />
       )}
     </div>
   );
@@ -396,6 +470,71 @@ function ZoneTooltipCard({
   );
 }
 
+function ForecastZoneTooltipCard({
+  x,
+  y,
+  props,
+}: {
+  x: number;
+  y: number;
+  props: ForecastZoneProperties;
+}) {
+  const hasData = props.risk_24h !== null;
+  return (
+    <div
+      className="pointer-events-none absolute z-50"
+      style={{ left: x + 14, top: y - 10 }}
+    >
+      <div className="bg-black/85 backdrop-blur border border-white/10 rounded-xl px-4 py-3.5 text-white shadow-2xl min-w-[210px]">
+        <div className="text-[11px] uppercase tracking-widest text-white/40 mb-1">
+          {props.nom}
+        </div>
+
+        {hasData ? (
+          <>
+            <div className="flex items-baseline gap-2 mb-1">
+              <span
+                className="font-bold text-3xl tracking-tight tabular-nums"
+                style={{ color: props.color_hex ?? "white" }}
+              >
+                {(props.risk_24h! * 100).toFixed(0)}%
+              </span>
+              <span className="text-xs text-white/50">{props.risk_label}</span>
+            </div>
+            <div className="text-[11px] text-white/40 mb-3">
+              Risque moyen de dégradation NO₂ (+24h)
+            </div>
+
+            <div className="space-y-1.5 pt-3 border-t border-white/10 text-xs">
+              {props.nearest_station_id !== null && (
+                <Row
+                  label="Station la plus proche"
+                  value={`#${props.nearest_station_id}`}
+                />
+              )}
+              {props.nearest_station_risk !== null && (
+                <Row
+                  label="Son risque propre"
+                  value={`${(props.nearest_station_risk * 100).toFixed(0)}%`}
+                />
+              )}
+              <Row label="Stations utilisées" value={String(props.source_count)} />
+            </div>
+
+            <div className="mt-3 pt-2 border-t border-white/10 text-[10px] text-white/30">
+              Interpolé (IDW) depuis les prédictions réelles
+            </div>
+          </>
+        ) : (
+          <div className="text-xs text-white/40 py-1">
+            Aucune station avec prédiction à proximité
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function StationTooltipCard({
   x,
   y,
@@ -451,20 +590,74 @@ function StationTooltipCard({
             </div>
           ))}
         </div>
+      </div>
+    </div>
+  );
+}
 
-        {station.risk_24h != null && (
-          <div className="mt-3 pt-3 border-t border-white/10">
-            <div className="flex items-center justify-between gap-3">
-              <span className="text-[10px] text-white/40 uppercase tracking-widest">
-                Risque NO₂ (+24h)
-              </span>
+// Prediction mode: the risk is the headline, not a footnote. Pollutant
+// readings (especially NO2 itself) become supporting evidence underneath,
+// since they're literally the inputs the model's lag features are built from.
+function StationForecastTooltipCard({
+  x,
+  y,
+  station,
+}: {
+  x: number;
+  y: number;
+  station: Station;
+}) {
+  const hasRisk = station.risk_24h != null;
+  const no2 = station.readings.find((r) => r.parameter === "no2");
+  const others = station.readings.filter((r) => r.parameter !== "no2");
+
+  return (
+    <div
+      className="pointer-events-none absolute z-50"
+      style={{ left: x + 14, top: y - 10 }}
+    >
+      <div className="bg-black/85 backdrop-blur border border-white/10 rounded-xl px-4 py-3.5 text-white shadow-2xl min-w-[220px]">
+        <div className="text-[11px] uppercase tracking-widest text-white/40 mb-1">
+          Station #{station.location_id}
+        </div>
+
+        {hasRisk ? (
+          <>
+            <div className="flex items-baseline gap-2 mb-1">
               <span
-                className="text-xs font-semibold tabular-nums"
-                style={{ color: riskColor(station.risk_24h) }}
+                className="font-bold text-3xl tracking-tight tabular-nums"
+                style={{ color: riskColor(station.risk_24h!) }}
               >
-                {(station.risk_24h * 100).toFixed(0)}%
+                {(station.risk_24h! * 100).toFixed(0)}%
               </span>
+              <span className="text-xs text-white/50">risque de dégradation</span>
             </div>
+            <div className="text-[11px] text-white/40 mb-3">
+              NO₂ &gt; 40 µg/m³ dans les prochaines 24h
+            </div>
+
+            <div className="space-y-1.5 pt-3 border-t border-white/10 text-xs">
+              {no2 && (
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-white/50">NO₂ actuel</span>
+                  <span className="text-white/90 tabular-nums">
+                    {no2.value.toFixed(1)} {no2.units}
+                  </span>
+                </div>
+              )}
+              {others.map((r) => (
+                <div key={r.sensors_id} className="flex items-center justify-between gap-3">
+                  <span className="text-white/40">{r.parameter.toUpperCase()}</span>
+                  <span className="text-white/70 tabular-nums">
+                    {r.value.toFixed(1)} {r.units}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </>
+        ) : (
+          <div className="text-xs text-white/40 py-1">
+            Historique insuffisant pour prédire
           </div>
         )}
       </div>
