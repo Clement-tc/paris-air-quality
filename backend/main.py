@@ -17,7 +17,7 @@ import httpx
 from fastapi import FastAPI, Depends, Query, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import func, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 import aqi
 import forecast
@@ -173,6 +173,11 @@ def air(
         select(Reading)
         .join(newest, (Reading.sensors_id == newest.c.sensors_id)
               & (Reading.datetime_utc == newest.c.mx))
+        # Without this, r.location.latitude below lazy-loads ONE query per
+        # row (N+1) -- invisible on local SQLite (near-zero latency per
+        # query) but ~60-80 extra network round trips to Postgres, which is
+        # exactly what made this endpoint take 5-6s after the Neon switch.
+        .options(selectinload(Reading.location))
     )
     if parameter:
         q = q.where(Reading.parameter == parameter.lower())
